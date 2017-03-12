@@ -409,6 +409,8 @@ cache_char2policy(char c)		/* replacement policy as a char */
   case 'l': return LRU;
   case 'r': return Random;
   case 'f': return FIFO;
+  //TODO: 't' for PLRUt
+  //TODO: 's' for SRRIP
   default: fatal("bogus replacement policy, `%c'", c);
   }
 }
@@ -427,6 +429,8 @@ cache_config(struct cache_t *cp,	/* cache instance */
 	  cp->policy == LRU ? "LRU"
 	  : cp->policy == Random ? "Random"
 	  : cp->policy == FIFO ? "FIFO"
+	  //TODO: policy == PLRUt
+	  //TODO: policy == SRRIP
 	  : (abort(), ""));
 }
 
@@ -575,6 +579,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
     repl = cp->sets[set].way_tail;
     update_way_list(&cp->sets[set], repl, Head);
     break;
+  //TODO: case PLRUt
+  //TODO: case SRRIP
   case Random:
     {
       int bindex = myrand() & (cp->assoc - 1);
@@ -668,6 +674,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   if (cmd == Write)
     blk->status |= CACHE_BLK_DIRTY;
 
+  //TODO: This has something to do with LRU.  Keep it in mind.
   /* if LRU replacement and this is not the first element of list, reorder */
   if (blk->way_prev && cp->policy == LRU)
     {
