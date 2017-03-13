@@ -102,9 +102,9 @@
 enum cache_policy {
   LRU,		/* replace least recently used block (perfect LRU) */
   Random,	/* replace a random block */
-  FIFO		/* replace the oldest block in the set */
-  //TODO: PLRUt /* replace the block pointed to by a tree structure.  Should be the LRU */
-  //TODO: SRRIP /* replace the block predicted to be referenced the furthest in the future */
+  FIFO,		/* replace the oldest block in the set */
+  PLRUt, 	/* replace the block pointed to by a tree structure.  Should be the LRU */
+  SRRIP 	/* replace the block predicted to be referenced the farthest in the future */
 };
 
 /* block status values */
@@ -144,6 +144,7 @@ struct cache_set_t
   struct cache_blk_t *blks;	/* cache blocks, allocated sequentially, so
 				   this pointer can also be used for random
 				   access to cache blocks */
+  unsigned int plru_tree_bits;		/* The bits that represent the state of the PLRU tree */
 };
 
 /* cache definition */
@@ -158,6 +159,7 @@ struct cache_t
   int assoc;			/* cache associativity */
   enum cache_policy policy;	/* cache replacement policy */
   unsigned int hit_latency;	/* cache hit latency */
+
 
   /* miss/replacement handler, read/write BSIZE bytes starting at BADDR
      from/into cache block BLK, returns the latency of the operation
@@ -183,6 +185,8 @@ struct cache_t
   int tag_shift;
   md_addr_t tag_mask;		/* use *after* shift */
   md_addr_t tagset_mask;	/* used for fast hit detection */
+  int plrut_width;			/* width of the PLRU tree binary string */
+  int bindex_width;			/* width of the block index based on the associativity */
 
   /* bus resource */
   tick_t bus_free;		/* time when bus to next level of cache is

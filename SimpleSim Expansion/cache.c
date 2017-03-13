@@ -139,6 +139,9 @@
 /* bound sqword_t/dfloat_t to positive int */
 #define BOUND_POS(N)		((int)(MIN(MAX(0, (N)), 2147483647)))
 
+/* tests if a the bit at pos in variable var is set */
+#define CHECK_BIT(var,pos) ((var) & (1 << pos))
+
 /* unlink BLK from the hash table bucket chain in SET */
 static void
 unlink_htab_ent(struct cache_t *cp,		/* cache to update */
@@ -323,6 +326,11 @@ cache_create(char *name,		/* name of the cache */
   cp->tag_mask = (1 << (32 - cp->tag_shift))-1;
   cp->tagset_mask = ~cp->blk_mask;
   cp->bus_free = 0;
+  cp->plrut_width = cp->assoc - 1;
+
+  /* block index width is the 2nd log of the associativity */
+  for(cp->bindex_width = 0; (cp->assoc >> cp->bindex_width) != 1; cp->bindex_width++);
+
 
   /* print derived parameters during debug */
   debug("%s: cp->hsize     = %d", cp->name, cp->hsize);
@@ -368,6 +376,11 @@ cache_create(char *name,		/* name of the cache */
 	 otherwise, block accesses through SET->BLKS will fail (used
 	 during random replacement selection) */
       cp->sets[i].blks = CACHE_BINDEX(cp, cp->data, bindex);
+
+      /*Clear bits used to represent PLRUt */
+      unsigned int plrut_size = cp->assoc - 1;
+      cp->sets[i].plru_tree_bits = (1 << plrut_size) - 1;
+
       
       /* link the data blocks into ordered way chain and hash table bucket
          chains, if hash table exists */
@@ -383,6 +396,7 @@ cache_create(char *name,		/* name of the cache */
 	  blk->ready = 0;
 	  blk->user_data = (usize != 0
 			    ? (byte_t *)calloc(usize, sizeof(byte_t)) : NULL);
+
 
 	  /* insert cache block into set hash table */
 	  if (cp->hsize)
@@ -409,8 +423,8 @@ cache_char2policy(char c)		/* replacement policy as a char */
   case 'l': return LRU;
   case 'r': return Random;
   case 'f': return FIFO;
-  //TODO: 't' for PLRUt
-  //TODO: 's' for SRRIP
+  case 't': return PLRUt;
+  case 's': return SRRIP;
   default: fatal("bogus replacement policy, `%c'", c);
   }
 }
@@ -429,8 +443,8 @@ cache_config(struct cache_t *cp,	/* cache instance */
 	  cp->policy == LRU ? "LRU"
 	  : cp->policy == Random ? "Random"
 	  : cp->policy == FIFO ? "FIFO"
-	  //TODO: policy == PLRUt
-	  //TODO: policy == SRRIP
+	  : cp->policy == PLRUt ? "PLRUt"
+	  : cp->policy == SRRIP ? "SRRIP"
 	  : (abort(), ""));
 }
 
@@ -495,6 +509,74 @@ cache_stats(struct cache_t *cp,		/* cache instance */
 	  (double)cp->invalidations/sum);
 }
 
+/* get the index of a block accessed using PLRUt */
+int
+get_plrut_block_index(int bindex_width,			/* width of the block index address */
+						int plru_tree_bits		/* Current state of the set's PLRU tree*/	)
+{
+	int block_index = 0;			/* Block index will be built up in this variable*/
+	int bit_index = 0;				/* Index of the current bit in the PLRU tree */
+
+	/* Traverse the tree */
+	for(int j = 0; j < bindex_width; j++)
+	{
+		/* test the value of the current bit */
+		int bit_val = CHECK_BIT(plru_tree_bits, bit_index);
+
+		if(bit_val) 							/* if the bit at bit_index is set */
+		{
+			/* Traverse the right side of the tree */
+			bit_index = bit_index * 2 + 2;
+		}
+		else									/*else, the bit at bit_index is no set */
+		{
+			/* Traverse the left side of the tree */
+			bit_index = bit_index * 2 + 1;
+		}
+
+		bit_val = bit_val ^ 0b1;
+
+		/* add the new bit to the end of the block index address */
+		block_index  = (block_index << 1) | bit_val;
+	}
+
+	return block_index;
+}
+
+/* Update the PLRU tree state.  Should be used after every access. */
+int
+update_plrut(int plrut_width,			/* width of the PLRU tree binary string */
+			int block_index,			/* index of the accessed block */
+			int bindex_width, 			/* width of the block index address */
+			int old_plru_tree_bits		/* state of the PLRU tree before the access */)
+{
+	int new_plru_tree_bits = old_plru_tree_bits;		/* Will be built into the new state of the tree */
+	int tree_state_mask = (1 << plrut_width) - 1;		/* Creates a mask of all 1s */
+	int bit_index = 0;									/* Index of the current bit being operated on */
+	int update_mask;									/* Used to update new_plru_tree_bits */
+
+	/* Iterate through the block index address */
+	for(int j = 0; j < bindex_width; j++)
+	{
+		int bit_val = (block_index >> (bindex_width - 1 - j)) & 0b1;
+		update_mask = tree_state_mask & (~ (1 << bit_index));
+		new_plru_tree_bits = (new_plru_tree_bits & update_mask) | (bit_val << bit_index);
+
+		if(bit_val) 							/* if the bit at bit_index is set */
+		{
+			/* Traverse the right side of the tree */
+			bit_index = bit_index * 2 + 2;
+		}
+		else									/*else, the bit at bit_index is no set */
+		{
+			/* Traverse the left side of the tree */
+			bit_index = bit_index * 2 + 1;
+		}
+	}
+
+	return new_plru_tree_bits;
+}
+
 /* access a cache, perform a CMD operation on cache CP at address ADDR,
    places NBYTES of data at *P, returns latency of operation if initiated
    at NOW, places pointer to block user data in *UDATA, *P is untouched if
@@ -516,6 +598,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   md_addr_t bofs = CACHE_BLK(cp, addr);
   struct cache_blk_t *blk, *repl;
   int lat = 0;
+
 
   /* default replacement address */
   if (repl_addr)
@@ -580,7 +663,19 @@ cache_access(struct cache_t *cp,	/* cache to access */
     update_way_list(&cp->sets[set], repl, Head);
     break;
   //TODO: case PLRUt
+  case PLRUt:
+  {
+	  //printf("***PLRUt MISS***\n");
+	  int old_plru_tree_bits = cp->sets[set].plru_tree_bits;
+	  int bindex = get_plrut_block_index(cp->bindex_width, old_plru_tree_bits);
+	  repl = CACHE_BINDEX(cp, cp->sets[set].blks, bindex);
+	  cp->sets[set].plru_tree_bits = update_plrut(cp->plrut_width, bindex, cp->bindex_width, old_plru_tree_bits);
+  }
+	  break;
   //TODO: case SRRIP
+  case SRRIP:
+	  printf("***SRRIP MISS***");
+	  break;
   case Random:
     {
       int bindex = myrand() & (cp->assoc - 1);
@@ -674,13 +769,30 @@ cache_access(struct cache_t *cp,	/* cache to access */
   if (cmd == Write)
     blk->status |= CACHE_BLK_DIRTY;
 
-  //TODO: This has something to do with LRU.  Keep it in mind.
+  //TODO: This is where the "recency" data is updated
   /* if LRU replacement and this is not the first element of list, reorder */
   if (blk->way_prev && cp->policy == LRU)
     {
       /* move this block to head of the way (MRU) list */
       update_way_list(&cp->sets[set], blk, Head);
     }
+  //TODO: PLRUt node way updates
+  if (cp->policy == PLRUt)
+  {
+	  /* Find index of block in set */
+	  int bindex = 0;
+
+	  /* iterate through all the blocks in the set */
+	  for (struct cache_blk_t *iterator = blk; iterator != NULL; iterator = iterator->way_prev)
+	  {
+		  bindex++;
+	  }
+
+	  int old_plru_tree_bits = cp->sets[set].plru_tree_bits;
+	  cp->sets[set].plru_tree_bits = update_plrut(cp->plrut_width, bindex, cp->bindex_width, old_plru_tree_bits);
+  }
+
+  //TODO: SRRIP bit updates
 
   /* tag is unchanged, so hash links (if they exist) are still valid */
 
