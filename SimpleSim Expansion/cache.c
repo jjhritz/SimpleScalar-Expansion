@@ -596,7 +596,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
   md_addr_t tag = CACHE_TAG(cp, addr);
   md_addr_t set = CACHE_SET(cp, addr);
   md_addr_t bofs = CACHE_BLK(cp, addr);
-  struct cache_blk_t *blk, *repl;
+  struct cache_blk_t *blk, *repl, *iterator;
+
   int lat = 0;
 
 
@@ -674,7 +675,60 @@ cache_access(struct cache_t *cp,	/* cache to access */
 	  break;
   //TODO: case SRRIP
   case SRRIP:
-	  printf("***SRRIP MISS***");
+	  //printf("***SRRIP MISS***");
+
+	  /* Initialize victim block pointer to NULL */
+	  repl = NULL;
+
+	  /* iterate through the set to find a victim block*/
+	  while(repl == NULL)
+	  {
+		  /* start at head of way chain */
+		  iterator = cp->sets[set].way_head;
+
+		  /* iterate through chain to find victim with RRPV of 3 (or more, in case of increment issues) */
+		  while(iterator != NULL && repl == NULL)
+		  {
+			  /* if current block has RRPV of 3, send it to repl for drop */
+			  if(iterator->rrpv >= 3)
+			  {
+				  /* mark current block for replacement */
+				  repl = iterator;
+			  }
+			  /* else, continue through the waychain */
+			  else
+			  {
+				  /* iterate to the next block in the chain */
+				  iterator = iterator->way_next;
+			  }
+		  }
+
+		  /* If repl is still NULL, there are no blocks have an RRPV of 3.
+		   * We have to increment the RRPV of all blocks in set and try again*/
+		  if(repl == NULL)
+		  {
+			  /* reset iterator to head of way chain */
+			  iterator = cp->sets[set].way_head;
+
+			  /* Iterate through the way chain */
+			  while(iterator != NULL)
+			  {
+				  /* increment block RRPV */
+				  iterator->rrpv++;
+				  /* iterate to the next block in the chain */
+				  iterator = iterator->way_next;
+			  }
+		  }
+
+	  }
+
+	  /* We've now found a victim block with an RRPV of 3 or more */
+
+	  /* Reset block's RRPV to 2.  Block will take on new DATA, but block object will not be replaced */
+	  repl->rrpv = 2;
+	  /* Update the way list to get new data for victim block */
+	  update_way_list(&cp->sets[set], repl, Tail);
+
 	  break;
   case Random:
     {
@@ -757,6 +811,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
  cache_hit: /* slow hit handler */
   
   /* **HIT** */
+
+  blk->rrpv = 0;			/* Set block RRPV to 0 */
   cp->hits++;
 
   /* copy data out of cache block, if block exists */
@@ -810,7 +866,8 @@ cache_access(struct cache_t *cp,	/* cache to access */
  cache_fast_hit: /* fast hit handler */
   
   /* **FAST HIT** */
-  cp->hits++;
+ blk->rrpv = 0;			/* Set block RRPV to 0 */
+ cp->hits++;
 
   /* copy data out of cache block, if block exists */
   if (cp->balloc)

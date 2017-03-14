@@ -123,6 +123,7 @@ struct cache_blk_t
      pointer, deletion requires a trip through the hash table bucket list */
   md_addr_t tag;		/* data block tag value */
   unsigned int status;		/* block status, see CACHE_BLK_* defs above */
+  byte_t rrpv;		/* the re-reference value for the block.  Should be initialized to 2 on insertion */
   tick_t ready;		/* time when block will be accessible, field
 				   is set when a miss fetch is initiated */
   byte_t *user_data;		/* pointer to user defined data, e.g.,
