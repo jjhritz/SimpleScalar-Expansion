@@ -104,7 +104,10 @@ enum bpred_class {
   BPred2bit,			/* 2-bit saturating cntr pred (dir mapped) */
   BPredTaken,			/* static predict taken */
   BPredNotTaken,		/* static predict not taken */
-  BPred_NUM
+  BPred_NUM,
+  //TODO: add BPredTour and BPredOGEHL
+  BPredTour,			/* Tournament predictor */
+  BPredOGEHL			/* O-GEHL predictor */
 };
 
 /* an entry in a BTB */
@@ -141,6 +144,7 @@ struct bpred_t {
     struct bpred_dir_t *bimod;	  /* first direction predictor */
     struct bpred_dir_t *twolev;	  /* second direction predictor */
     struct bpred_dir_t *meta;	  /* meta predictor */
+    struct bpred_dir_t *twolevg;	/*global direction predictor*/
   } dirpred;
 
   struct {
@@ -161,6 +165,7 @@ struct bpred_t {
   counter_t used_ras;		/* num RAS predictions used */
   counter_t used_bimod;		/* num bimodal predictions used (BPredComb) */
   counter_t used_2lev;		/* num 2-level predictions used (BPredComb) */
+  counter_t used_2levg;		/* num global predictions used (BPredTour) */
   counter_t jr_hits;		/* num correct addr-predictions for JR's */
   counter_t jr_seen;		/* num JR's seen */
   counter_t jr_non_ras_hits;	/* num correct addr-preds for non-RAS JR's */
@@ -182,6 +187,7 @@ struct bpred_update_t {
     unsigned int ras    : 1;	/* RAS used */
     unsigned int bimod  : 1;    /* bimodal predictor */
     unsigned int twolev : 1;    /* 2-level predictor */
+    unsigned int twolevg: 1;    /* global predictor */
     unsigned int meta   : 1;    /* meta predictor (0..bimod / 1..2lev) */
   } dir;
 };

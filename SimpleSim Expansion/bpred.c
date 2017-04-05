@@ -112,13 +112,38 @@ bpred_create(enum bpred_class class,	/* type of predictor to create */
   case BPredNotTaken:
     /* no other state */
     break;
+   //TODO: create BPredTour
+    /* Similar behavior to BPredComb, just with a direct-mapped 2-level global predictor */
+  case BPredTour:
+  {
+	  /* global 2-level component */
+	 pred->dirpred.twolevg=
+	   bpred_dir_create(BPred2Level, 1 /*creates a direct-mapped table for global BPred */,
+			   	   	   meta_size /* use meta_size because global and meta are the same size*/,
+					   shift_width, xor);
 
+	 /* local 2-level component */
+	 //TODO: Need to make the local use 3-bit counters
+	 pred->dirpred.twolev =
+	   bpred_dir_create(BPred2Level, l1size, l2size, shift_width, xor);
+
+	 /* metapredictor component */
+	 pred->dirpred.meta =
+	   bpred_dir_create(BPred2bit, meta_size, 0, 0, 0);
+	  break;
+  }
+   //TODO: create BPredOGEHL
   default:
     panic("bogus predictor class");
   }
 
   /* allocate ret-addr stack */
   switch (class) {
+  /*Use C case fallthrough to handle new predictors*/
+  //TODO: create BPredTour
+  case BPredTour:
+  //TODO: create BPredOGEHL
+  case BPredOGEHL:
   case BPredComb:
   case BPred2Level:
   case BPred2bit:
@@ -168,7 +193,6 @@ bpred_create(enum bpred_class class,	/* type of predictor to create */
   case BPredNotTaken:
     /* no other state */
     break;
-
   default:
     panic("bogus predictor class");
   }
@@ -255,7 +279,6 @@ bpred_dir_create (
   case BPredNotTaken:
     /* no other state */
     break;
-
   default:
     panic("bogus branch direction predictor class");
   }
@@ -331,7 +354,18 @@ bpred_config(struct bpred_t *pred,	/* branch predictor instance */
   case BPredNotTaken:
     bpred_dir_config (pred->dirpred.bimod, "nottaken", stream);
     break;
-
+    //TODO: BPredTour description
+  case BPredTour:
+  {
+	    bpred_dir_config (pred->dirpred.twolevg, "2levg", stream);
+	    bpred_dir_config (pred->dirpred.twolev, "2lev", stream);
+	    bpred_dir_config (pred->dirpred.meta, "meta", stream);
+	    fprintf(stream, "btb: %d sets x %d associativity",
+		    pred->btb.sets, pred->btb.assoc);
+	    fprintf(stream, "ret_stack: %d entries", pred->retstack.size);
+	  break;
+  }
+  //TODO: BPredOGEHL description
   default:
     panic("bogus branch predictor class");
   }
@@ -373,6 +407,13 @@ bpred_reg_stats(struct bpred_t *pred,	/* branch predictor instance */
     case BPredNotTaken:
       name = "bpred_nottaken";
       break;
+      //TODO: BPredTour stats
+    case BPredTour:
+    {
+    	name = "bpred_tour";
+    	break;
+    }
+      //TODO: BPredOGEHL stats
     default:
       panic("bogus branch predictor class");
     }
@@ -402,6 +443,18 @@ bpred_reg_stats(struct bpred_t *pred,	/* branch predictor instance */
 		       "total number of 2-level predictions used", 
 		       &pred->used_2lev, 0, NULL);
     }
+  /*get stats for both halves of tournament predictor */
+  if (pred->class == BPredTour)
+  {
+      sprintf(buf, "%s.used_2levg", name);
+      stat_reg_counter(sdb, buf,
+		       "total number of bimodal predictions used",
+		       &pred->used_2levg, 0, NULL);
+      sprintf(buf, "%s.used_2lev", name);
+      stat_reg_counter(sdb, buf,
+		       "total number of 2-level predictions used",
+		       &pred->used_2lev, 0, NULL);
+  }
   sprintf(buf, "%s.misses", name);
   stat_reg_counter(sdb, buf, "total number of misses", &pred->misses, 0, NULL);
   sprintf(buf, "%s.jr_hits", name);
@@ -602,6 +655,61 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
 	    }
 	}
       break;
+      //TODO: BPredTour lookup
+      /*Similar behavior to BPredComb, just different variable names
+       * and more relevant metapredictor*/
+    case BPredTour:
+    {
+        if ((MD_OP_FLAGS(op) & (F_CTRL|F_UNCOND)) != (F_CTRL|F_UNCOND))
+        {
+		  char *global, *twolev, *meta;
+		  global = bpred_dir_lookup (pred->dirpred.twolevg, baddr);
+		  twolev = bpred_dir_lookup (pred->dirpred.twolev, baddr);
+		  meta = bpred_dir_lookup (pred->dirpred.meta, baddr);
+		  dir_update_ptr->pmeta = meta;
+		  dir_update_ptr->dir.meta  = (*meta >= 2);
+		  dir_update_ptr->dir.twolevg = (*global >= 2);
+		  dir_update_ptr->dir.twolev  = (*twolev >= 4);
+
+		  /* Resolve strong vs. weak states */
+		  /* If local is Strong Taken (7) and global is Taken (>= 1)
+		   * OR
+		   * Local is Strong Not Taken (0) and global is Not Taken (<= 2)
+		   * Override combo behavior
+		   */
+		  if((*twolev == 7 && *global >= 1) /*Local: Strong Taken, global: Taken*/
+			 || (*twolev == 0 && *global <= 2) ) /*Local: Strong Not Taken, global: Not Taken*/
+		  {
+			  dir_update_ptr->pdir1 = twolev;
+			  dir_update_ptr->pdir2 = global;
+		  }
+		  /* Else, weak agreement or disagreement; use combo behavior */
+		  else
+		  {
+			  if (*meta >= 2)
+				{
+				  dir_update_ptr->pdir1 = twolev;
+				  dir_update_ptr->pdir2 = global;
+				}
+			  else
+				{
+				  dir_update_ptr->pdir1 = global;
+				  dir_update_ptr->pdir2 = twolev;
+				}
+		  }
+
+		  /* If there is a disagreement between local and global,
+		   * assign metapredictor to resolve.
+		   */
+		  if((*twolev >= 4 && *global <= 1) /*Local: Taken, global: Not Taken*/
+			|| (*twolev <= 3 && *global >= 2)) /*Local: Not Taken, global: Taken*/
+		  {
+			  dir_update_ptr->pmeta = meta;
+		  }
+
+        }
+    	break;
+    }
     case BPred2Level:
       if ((MD_OP_FLAGS(op) & (F_CTRL|F_UNCOND)) != (F_CTRL|F_UNCOND))
 	{
@@ -627,6 +735,7 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
 	{
 	  return btarget;
 	}
+      //TODO: case BPredOGEHL
     default:
       panic("bogus predictor class");
   }
@@ -781,6 +890,23 @@ bpred_update(struct bpred_t *pred,	/* branch predictor instance */
 	pred->used_2lev++;
       else
 	pred->used_bimod++;
+
+      //TODO: Increase BPredTour used counters
+      /* Need to take into account the member names used in BPredTour */
+      if(pred->class == BPredTour)
+      {
+    	  /* If the local predictor is defined, increment its used counter */
+    	  if(dir_update_ptr->dir.twolev)
+    	  {
+    		  pred->used_2lev++;
+    	  }
+
+    	  /* If the global predictor is defined, increment its used counter */
+    	  if(dir_update_ptr->dir.twolevg)
+    	  {
+    		  pred->used_2levg++;
+    	  }
+      }
     }
 
   /* keep stats about JR's; also, but don't change any bpred state for JR's
@@ -827,7 +953,7 @@ bpred_update(struct bpred_t *pred,	/* branch predictor instance */
   /* update L1 table if appropriate */
   /* L1 table is updated unconditionally for combining predictor too */
   if ((MD_OP_FLAGS(op) & (F_CTRL|F_UNCOND)) != (F_CTRL|F_UNCOND) &&
-      (pred->class == BPred2Level || pred->class == BPredComb))
+      (pred->class == BPred2Level || pred->class == BPredComb || pred->class == BPredTour))
     {
       int l1index, shift_reg;
       
@@ -838,6 +964,21 @@ bpred_update(struct bpred_t *pred,	/* branch predictor instance */
 	(pred->dirpred.twolev->config.two.shiftregs[l1index] << 1) | (!!taken);
       pred->dirpred.twolev->config.two.shiftregs[l1index] =
 	shift_reg & ((1 << pred->dirpred.twolev->config.two.shift_width) - 1);
+
+      //TODO: Update global history in BPredTour
+      /* Update global history in BPredTour */
+      if(pred->class == BPredTour)
+      {
+    	  int l1indexg, shift_regg;
+
+    	  l1indexg =
+    	  	(baddr >> MD_BR_SHIFT) & (pred->dirpred.twolevg->config.two.l1size - 1);
+    	        shift_regg =
+    	  	(pred->dirpred.twolevg->config.two.shiftregs[l1indexg] << 1) | (!!taken);
+    	        pred->dirpred.twolevg->config.two.shiftregs[l1indexg] =
+    	  	shift_regg & ((1 << pred->dirpred.twolevg->config.two.shift_width) - 1);
+      }
+
     }
 
   /* find BTB entry if it's a taken branch (don't allocate for non-taken) */
@@ -945,7 +1086,9 @@ bpred_update(struct bpred_t *pred,	/* branch predictor instance */
   /* meta predictor */
   if (dir_update_ptr->pmeta)
     {
-      if (dir_update_ptr->dir.bimod != dir_update_ptr->dir.twolev)
+	  //TODO: Add handling for BPredTour metapredictor update
+      if ((( pred->class != BPredTour) && (dir_update_ptr->dir.bimod != dir_update_ptr->dir.twolev))
+    		  || (( pred->class == BPredTour) && (dir_update_ptr->dir.twolevg != dir_update_ptr->dir.twolev)))
 	{
 	  /* we only update meta predictor if directions were different */
 	  if (dir_update_ptr->dir.twolev == (unsigned int)taken)
@@ -956,7 +1099,7 @@ bpred_update(struct bpred_t *pred,	/* branch predictor instance */
 	    }
 	  else
 	    {
-	      /* bimodal predictor was correct */
+	      /* bimodal/global predictor was correct */
 	      if (*dir_update_ptr->pmeta > 0)
 		--*dir_update_ptr->pmeta;
 	    }

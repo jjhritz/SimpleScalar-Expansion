@@ -689,6 +689,8 @@ sim_reg_options(struct opt_odb_t *odb)
 		 &bpred_spec_opt, /* default */NULL,
 		 /* print */TRUE, /* format */NULL);
 
+  //TODO: add bpred tournament and bpred ogehl
+
   /* decode options */
 
   opt_reg_int(odb, "-decode:width",
@@ -972,6 +974,21 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
 			  /* btb assoc */btb_config[1],
 			  /* ret-addr stack size */ras_size);
     }
+  //TODO: create tournament predictor
+  else if (!mystricmp(pred_type, "tournament"))
+  {
+	  pred = bpred_create(BPredComb,
+	  			  /* bimod table size */bimod_config[0],
+	  			  /* l1 size */twolev_config[0],
+	  			  /* l2 size */twolev_config[1],
+	  			  /* meta table size */4096,
+	  			  /* history reg size */twolev_config[2],
+	  			  /* history xor address */twolev_config[3],
+	  			  /* btb sets */1024,
+	  			  /* btb assoc */btb_config[1],
+	  			  /* ret-addr stack size */ras_size);
+  }
+  //TODO: create OGEHL predictor
   else
     fatal("cannot parse predictor type `%s'", pred_type);
 
