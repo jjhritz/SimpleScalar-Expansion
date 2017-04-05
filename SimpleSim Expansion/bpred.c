@@ -448,7 +448,7 @@ bpred_reg_stats(struct bpred_t *pred,	/* branch predictor instance */
   {
       sprintf(buf, "%s.used_2levg", name);
       stat_reg_counter(sdb, buf,
-		       "total number of bimodal predictions used",
+		       "total number of global predictions used",
 		       &pred->used_2levg, 0, NULL);
       sprintf(buf, "%s.used_2lev", name);
       stat_reg_counter(sdb, buf,

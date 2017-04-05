@@ -977,7 +977,7 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
   //TODO: create tournament predictor
   else if (!mystricmp(pred_type, "tournament"))
   {
-	  pred = bpred_create(BPredComb,
+	  pred = bpred_create(BPredTour,
 	  			  /* bimod table size */bimod_config[0],
 	  			  /* l1 size */twolev_config[0],
 	  			  /* l2 size */twolev_config[1],
