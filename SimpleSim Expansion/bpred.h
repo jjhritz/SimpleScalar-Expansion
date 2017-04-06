@@ -189,6 +189,7 @@ struct bpred_t {
   unsigned long long ghist; /* Global branch history for O-GEHL */
   unsigned int phist;		/* Path history for O-GEHL */
   int theta;				/* Threshold for O-GEHL updates */
+  int sum;					/* The sum calculated from all O-GEHL counters */
 };
 
 /* branch predictor update information */

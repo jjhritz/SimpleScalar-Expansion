@@ -817,7 +817,7 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
     		//TODO: Resolve OGEHL lookups
     		/* Prediction sum  = M/2 + SUM[0,M)(C(i)) */
 
-    		int sum = 4;		/* 8 tables / 2 */
+    		pred->sum = 4;		/* 8 tables / 2 */
 
     		/* For all 8 tables, get counter address and counter value */
     		for(int table = 0; table < 8; table++)
@@ -825,23 +825,29 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
     			/* Retrieve counter index using hashing function */
     			unsigned int counter_index =
     					ogehl_count_index(pred,
-										&(pred->dirpred.ogehl[i]),
+										&(pred->dirpred.ogehl[table]),
 										baddr,
-										i); 	/* Only T0 doesn't use ghist */
+										table); 	/* Only T0 doesn't use ghist */
 
     			/* add counter value to sum */
-    			sum += pred->dirpred.ogehl[table].pred_counters[counter_index];
+    			pred->sum += pred->dirpred.ogehl[table].pred_counters[counter_index];
     		}
 
     		//TODO: deliver prediction
+
+			/* Allocate pdir1 */
+    		dir_update_ptr->pdir1 = (char*) malloc(sizeof(char));
+
     		/* If sum is zero or positive, predict taken */
-    		if(sum <= 0)
+    		if(pred->sum <= 0)
     		{
     			/* Predict taken */
+    			*(dir_update_ptr->pdir1) = 3;
     		}
     		else /* Else, sum is negative, predict not take */
     		{
-    			/* Predict not take */
+    			/* Predict not taken */
+    			*(dir_update_ptr->pdir1) = 0;
     		}
 
 		}
@@ -1346,6 +1352,67 @@ bpred_update(struct bpred_t *pred,	/* branch predictor instance */
 	    --*dir_update_ptr->pdir1;
 	}
     }
+
+  //TODO: Update OGEHL counters and histories
+  if(pred->class == BPredOGEHL)
+  {
+	  /* push 3rd bit of branch address into phist */
+	  unsigned int path = pred->phist & (0b1 << 2);
+	  path = path >> 2;
+
+	  pred->phist = pred->phist << 1;
+	  pred->phist |= path;
+
+	  /* push taken/not taken 1/0 onto ghist */
+	  if(taken)
+	  {
+		  pred->ghist = pred->ghist << 1;
+		  pred->ghist |= 0b1;
+	  }
+	  else
+	  {
+		  pred->ghist = pred->ghist << 1;
+		  pred->ghist |= 0b0;
+	  }
+
+	  /* If prediction was incorrect or ABS(sum) <= theta , decrement all counters used  */
+	  if(!correct || (abs(pred->sum) <= pred->theta))
+	  {
+  		/* For all 8 tables, get counter address and decrement counter value */
+  		for(int table = 0; table < 8; table++)
+  		{
+  			/* Retrieve counter index using hashing function */
+  			unsigned int counter_index =
+  					ogehl_count_index(pred,
+										&(pred->dirpred.ogehl[table]),
+										baddr,
+										table); 	/* Only T0 doesn't use ghist */
+
+  			/* decrement counter value*/
+  			pred->dirpred.ogehl[table].pred_counters[counter_index]--;
+  		}
+
+	  }
+
+	  /* Else, prediction was correct, increment all counters used*/
+	  else
+	  {
+	  		/* For all 8 tables, get counter address and increment counter value */
+	  		for(int table = 0; table < 8; table++)
+	  		{
+	  			/* Retrieve counter index using hashing function */
+	  			unsigned int counter_index =
+	  					ogehl_count_index(pred,
+											&(pred->dirpred.ogehl[table]),
+											baddr,
+											table); 	/* Only T0 doesn't use ghist */
+
+	  			/* increment counter value*/
+	  			pred->dirpred.ogehl[table].pred_counters[counter_index]++;
+	  		}
+	  }
+
+  }
 
   /* combining predictor also updates second predictor and meta predictor */
   /* second direction predictor */
