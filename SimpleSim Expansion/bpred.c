@@ -969,7 +969,7 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
 
 
 unsigned int
-oghel_count_index(struct bpred_t *pred, 		/* branch predictor instance */
+ogehl_count_index(struct bpred_t *pred, 		/* branch predictor instance */
 			struct bpred_ogehl_table_t *table, 	/* O-GEHL table instance */
 			md_addr_t baddr, 					/* branch address */
 			int use_ghist)						/* 0 if table does not use global history, non-zero if it does */
@@ -1031,12 +1031,15 @@ oghel_count_index(struct bpred_t *pred, 		/* branch predictor instance */
 	comb_op |= (baddr_part << (baddr_part_width + phist_part_width - 1));
 
 
-	/* get phist_part_width bits from table->phist, push into combined string */
-	/* get phist_part */
-	phist_part = pred->phist & ~(0b0 << (phist_part_width - 1));
+	if(use_ghist)
+	{
+		/* get phist_part_width bits from table->phist, push into combined string */
+		/* get phist_part */
+		phist_part = pred->phist & ~(0b0 << (phist_part_width - 1));
 
-	/* set bits in comb_op in third section */
-	comb_op |= (phist_part << (phist_part_width - 1));
+		/* set bits in comb_op in third section */
+		comb_op |= (phist_part << (phist_part_width - 1));
+	}
 
 	/* Determine spacing between bits captured for operators
 	 * When comb_op_width <= three_op_width, this need only be 1
@@ -1044,8 +1047,8 @@ oghel_count_index(struct bpred_t *pred, 		/* branch predictor instance */
 	 * When comb_op_width > three_op_width, the bits need to be captured from
 	 * (roughly) regular intervals.
 	 */
-	unsigned double delta = 1;
-	unsigned double position = 0;
+	double delta = 1;
+	double position = 0;
 	unsigned int test_val = 0b0;
 
 	/* If comb_op_width > three_op_width, we need a bigger delta */

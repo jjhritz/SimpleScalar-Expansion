@@ -309,7 +309,7 @@ minimum(int a, /* The first integer to compare */
  * and a 10-bit unsigned integer for T1.
  */
 unsigned int
-oghel_count_index(struct bpred_t *pred, 		/* branch predictor instance */
+ogehl_count_index(struct bpred_t *pred, 		/* branch predictor instance */
 			struct bpred_ogehl_table_t *table, 	/* O-GEHL table instance */
 			md_addr_t baddr, 					/* branch address */
 			int use_ghist);						/* 0 if table does not use global history, non-zero if it does */
