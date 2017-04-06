@@ -118,6 +118,14 @@ struct bpred_btb_ent_t {
   struct bpred_btb_ent_t *prev, *next; /* lru chaining pointers */
 };
 
+/* O-GEHL table def */
+struct bpred_ogehl_table_t {
+	int bhist_width;					/* number of bits in the branch history */
+	int counter_width;					/* number of bits in the prediction counters */
+	counter_t *pred_counters;			/* array of prediction counters */
+	int index_width; 					/* number of bits in counter array indices */
+};
+
 /* direction predictor def */
 struct bpred_dir_t {
   enum bpred_class class;	/* type of predictor */
@@ -141,10 +149,11 @@ struct bpred_dir_t {
 struct bpred_t {
   enum bpred_class class;	/* type of predictor */
   struct {
-    struct bpred_dir_t *bimod;	  /* first direction predictor */
-    struct bpred_dir_t *twolev;	  /* second direction predictor */
-    struct bpred_dir_t *meta;	  /* meta predictor */
-    struct bpred_dir_t *twolevg;	/*global direction predictor*/
+    struct bpred_dir_t *bimod;	  			/* first direction predictor */
+    struct bpred_dir_t *twolev;	  			/* second direction predictor */
+    struct bpred_dir_t *meta;	  			/* meta predictor */
+    struct bpred_dir_t *twolevg;			/* global direction predictor*/
+    struct bpred_ogehl_table_t ogehl[8];	/* tables used in O-GEHL predictor */
   } dirpred;
 
   struct {
@@ -176,6 +185,10 @@ struct bpred_t {
   counter_t retstack_pops;	/* number of times a value was popped */
   counter_t retstack_pushes;	/* number of times a value was pushed */
   counter_t ras_hits;		/* num correct return-address predictions */
+
+  unsigned long long ghist; /* Global branch history for O-GEHL */
+  unsigned int phist;		/* Path history for O-GEHL */
+  int theta;				/* Threshold for O-GEHL updates */
 };
 
 /* branch predictor update information */
@@ -278,6 +291,27 @@ bpred_update(struct bpred_t *pred,	/* branch predictor instance */
 	     enum md_opcode op,		/* opcode of instruction */
 	     struct bpred_update_t *dir_update_ptr); /* pred state pointer */
 
+/* Returns the lesser of two integers */
+int
+minimum(int a, /* The first integer to compare */
+		int b /* The second integer to compare */);
+
+/* Simple hashing function to map the global history, path history, and branch instruction address
+ * to a counter on an O-GEHL table.
+ * Creates a bit string of length L(i) ghist bits + [8,20] baddr bits + MIN(L(i), 16) phist bits:
+ *
+ * |________L(i) ghist________|________[8,20] baddr________|_____MIN(L(i), 16) phist_____|
+ *
+ * This bit string should be 33 bits long for T0,2-3.
+ * It will be 30 bits for T1 and > 33 bits for T4-7.
+ * Regardless of length, the function should return an 11-bit unsigned integer for T0,2-7
+ * and a 10-bit unsigned integer for T1.
+ */
+unsigned int
+oghel_count_index(struct bpred_t *pred, 		/* branch predictor instance */
+			struct bpred_ogehl_table_t *table, 	/* O-GEHL table instance */
+			md_addr_t baddr, 					/* branch address */
+			int use_ghist);						/* 0 if table does not use global history, non-zero if it does */
 
 #ifdef foo0
 /* OBSOLETE */

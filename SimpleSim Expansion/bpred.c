@@ -62,6 +62,7 @@
 /* turn this on to enable the SimpleScalar 2.0 RAS bug */
 /* #define RAS_BUG_COMPATIBLE */
 
+
 /* create a branch predictor */
 struct bpred_t *			/* branch predictory instance */
 bpred_create(enum bpred_class class,	/* type of predictor to create */
@@ -133,6 +134,91 @@ bpred_create(enum bpred_class class,	/* type of predictor to create */
 	  break;
   }
    //TODO: create BPredOGEHL
+  case BPredOGEHL:
+  {
+	  /* zero out path and global branch history */
+	  pred->phist = 0;
+	  pred->ghist = 0;
+
+	  /* set theta */
+	  pred->theta = 8;
+
+	  /* create O-GEHL tables*/
+
+	  /* Add stats to table 0 */
+	  pred->dirpred.ogehl[0].bhist_width = 0;		/* T0 does not use branch history */
+	  pred->dirpred.ogehl[0].counter_width = 5;		/* Counter width of T0 is 5 */
+	  pred->dirpred.ogehl[0].index_width = 11;		/* T0 uses 11-bit counter indices */
+	  /* allocate memory for counter array */
+	  if (!(pred->dirpred.ogehl[0].pred_counters = calloc(2048, sizeof(counter_t))))
+	    fatal("out of virtual memory");
+
+	  /* Add stats to table 1 */
+	  pred->dirpred.ogehl[1].bhist_width = 3;		/* T1 uses 3 bits of history */
+	  pred->dirpred.ogehl[1].counter_width = 5;		/* Counter width of T1 is 5 */
+	  pred->dirpred.ogehl[1].index_width = 10;		/* T1 uses 10-bit counter indices */
+	  /* allocate memory for counter array */
+	  if (!(pred->dirpred.ogehl[1].pred_counters = calloc(1024, sizeof(counter_t))))
+	    fatal("out of virtual memory");
+
+	  /* Add stats to table 2 */
+	  pred->dirpred.ogehl[2].bhist_width = 5;		/* T2 uses 5 bits of history */
+	  pred->dirpred.ogehl[2].counter_width = 4;		/* Counter width of T2 is 4 */
+	  pred->dirpred.ogehl[2].index_width = 11;		/* T2 uses 11-bit counter indices */
+	  /* allocate memory for counter array */
+	  if (!(pred->dirpred.ogehl[2].pred_counters = calloc(2048, sizeof(counter_t))))
+	    fatal("out of virtual memory");
+
+	  /* Add stats to table 3 */
+	  pred->dirpred.ogehl[3].bhist_width = 8;		/* T3 uses 8 bits of history */
+	  pred->dirpred.ogehl[3].counter_width = 4;		/* Counter width of T3 is 4*/
+	  pred->dirpred.ogehl[3].index_width = 11;		/* T3 uses 11-bit counter indices */
+	  /* allocate memory for counter array */
+	  if (!(pred->dirpred.ogehl[3].pred_counters = calloc(2048, sizeof(counter_t))))
+	    fatal("out of virtual memory");
+
+	  /* Add stats to table 3 */
+	  pred->dirpred.ogehl[3].bhist_width = 8;		/* T3 uses 8 bits of history */
+	  pred->dirpred.ogehl[3].counter_width = 4;		/* Counter width of T3 is 4*/
+	  pred->dirpred.ogehl[3].index_width = 11;		/* T3 uses 11-bit counter indices */
+	  /* allocate memory for counter array */
+	  if (!(pred->dirpred.ogehl[3].pred_counters = calloc(2048, sizeof(counter_t))))
+	    fatal("out of virtual memory");
+
+	  /* Add stats to table 4 */
+	  pred->dirpred.ogehl[4].bhist_width = 12;		/* T4 uses 12 bits of history */
+	  pred->dirpred.ogehl[4].counter_width = 4;		/* Counter width of T4 is 4*/
+	  pred->dirpred.ogehl[4].index_width = 11;		/* T4 uses 11-bit counter indices */
+	  /* allocate memory for counter array */
+	  if (!(pred->dirpred.ogehl[4].pred_counters = calloc(2048, sizeof(counter_t))))
+	    fatal("out of virtual memory");
+
+	  /* Add stats to table 5 */
+	  pred->dirpred.ogehl[5].bhist_width = 19;		/* T5 uses 19 bits of history */
+	  pred->dirpred.ogehl[5].counter_width = 4;		/* Counter width of T5 is 4*/
+	  pred->dirpred.ogehl[5].index_width = 11;		/* T5 uses 11-bit counter indices */
+	  /* allocate memory for counter array */
+	  if (!(pred->dirpred.ogehl[5].pred_counters = calloc(2048, sizeof(counter_t))))
+	    fatal("out of virtual memory");
+
+	  /* Add stats to table 6 */
+	  pred->dirpred.ogehl[6].bhist_width = 31;		/* T6 uses 31 bits of history */
+	  pred->dirpred.ogehl[6].counter_width = 4;		/* Counter width of T6 is 4*/
+	  pred->dirpred.ogehl[6].index_width = 11;		/* T6 uses 11-bit counter indices */
+	  /* allocate memory for counter array */
+	  if (!(pred->dirpred.ogehl[6].pred_counters = calloc(2048, sizeof(counter_t))))
+	    fatal("out of virtual memory");
+
+	  /* Add stats to table 7 */
+	  pred->dirpred.ogehl[7].bhist_width = 49;		/* T7 uses 49 bits of history */
+	  pred->dirpred.ogehl[7].counter_width = 4;		/* Counter width of T7 is 4*/
+	  pred->dirpred.ogehl[7].index_width = 11;		/* T7 uses 11-bit counter indices */
+	  /* allocate memory for counter array */
+	  if (!(pred->dirpred.ogehl[7].pred_counters = calloc(2048, sizeof(counter_t))))
+	    fatal("out of virtual memory");
+
+	  break;
+  }
   default:
     panic("bogus predictor class");
   }
@@ -366,6 +452,14 @@ bpred_config(struct bpred_t *pred,	/* branch predictor instance */
 	  break;
   }
   //TODO: BPredOGEHL description
+  case BPredOGEHL:
+  {
+	  fprintf(stream, "O-GEHL predictor\n");
+		fprintf(stream, "btb: %d sets x %d associativity",
+			pred->btb.sets, pred->btb.assoc);
+		fprintf(stream, "ret_stack: %d entries", pred->retstack.size);
+	  break;
+  }
   default:
     panic("bogus branch predictor class");
   }
@@ -414,6 +508,11 @@ bpred_reg_stats(struct bpred_t *pred,	/* branch predictor instance */
     	break;
     }
       //TODO: BPredOGEHL stats
+    case BPredOGEHL:
+	{
+    	name = "bpred_ogehl";
+    	break;
+	}
     default:
       panic("bogus branch predictor class");
     }
@@ -710,6 +809,44 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
         }
     	break;
     }
+    //TODO: BPredOGEHL lookup
+    case BPredOGEHL:
+    {
+    	if ((MD_OP_FLAGS(op) & (F_CTRL|F_UNCOND)) != (F_CTRL|F_UNCOND))
+		{
+    		//TODO: Resolve OGEHL lookups
+    		/* Prediction sum  = M/2 + SUM[0,M)(C(i)) */
+
+    		int sum = 4;		/* 8 tables / 2 */
+
+    		/* For all 8 tables, get counter address and counter value */
+    		for(int table = 0; table < 8; table++)
+    		{
+    			/* Retrieve counter index using hashing function */
+    			unsigned int counter_index =
+    					ogehl_count_index(pred,
+										&(pred->dirpred.ogehl[i]),
+										baddr,
+										i); 	/* Only T0 doesn't use ghist */
+
+    			/* add counter value to sum */
+    			sum += pred->dirpred.ogehl[table].pred_counters[counter_index];
+    		}
+
+    		//TODO: deliver prediction
+    		/* If sum is zero or positive, predict taken */
+    		if(sum <= 0)
+    		{
+    			/* Predict taken */
+    		}
+    		else /* Else, sum is negative, predict not take */
+    		{
+    			/* Predict not take */
+    		}
+
+		}
+    	break;
+    }
     case BPred2Level:
       if ((MD_OP_FLAGS(op) & (F_CTRL|F_UNCOND)) != (F_CTRL|F_UNCOND))
 	{
@@ -735,7 +872,6 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
 	{
 	  return btarget;
 	}
-      //TODO: case BPredOGEHL
     default:
       panic("bogus predictor class");
   }
@@ -823,6 +959,150 @@ bpred_lookup(struct bpred_t *pred,	/* branch predictor instance */
 	      ? /* taken */ pbtb->target
 	      : /* not taken */ 0);
     }
+}
+
+
+unsigned int
+oghel_count_index(struct bpred_t *pred, 		/* branch predictor instance */
+			struct bpred_ogehl_table_t *table, 	/* O-GEHL table instance */
+			md_addr_t baddr, 					/* branch address */
+			int use_ghist)						/* 0 if table does not use global history, non-zero if it does */
+
+{
+	unsigned long long ghist_part;			/* Component of xor operator taken from global history*/
+	unsigned int baddr_part;				/* Component of xor operator taken from instruction address*/
+	unsigned int phist_part;				/* Component of xor operator taken from path history */
+	unsigned __int128 comb_op;				/* Combined bit string to be split into 3 parts */
+	unsigned int baddr_part_width;			/* The number of instruction address bits to be used */
+	unsigned int phist_part_width;			/* The number of path history bits to be used */
+	unsigned int three_op_width;			/* Total number of bits to be xor'd */
+	unsigned int comb_op_width;				/* Total number of bits retrieved from ghist, baddr, and phist*/
+	unsigned int op1 = 0;					/* First xor operand */
+	unsigned int op2 = 0;					/* Second xor operand */
+	unsigned int op3 = 0;					/* Third xor operand */
+
+	/* Determine total number of bits to be xor'd.
+	 * 3-way xor requires 3 operands of a length equal to the width of the counter
+	 * indices on the O-GEHL table.
+	 */
+	three_op_width = 3 * table->index_width;
+
+	/* Determine the number of phist bits to be xor'd
+	 * Should be equal to the number of branch history bits
+	 * UNLESS L(i) > 16.
+	 * Number of phist bits should never exceed 16.
+	 */
+	phist_part_width = minimum(table->bhist_width, 16);
+
+	/* Determine the number of address bits to be xor'd */
+	baddr_part_width = three_op_width - table->bhist_width - phist_part_width;
+
+	/* Number of branch address bits should be in range [8,20] */
+	if(baddr_part_width < 8)
+	{
+		baddr_part_width = 8;
+	}
+	else if(baddr_part_width > 20)
+	{
+		baddr_part_width = 20;
+	}
+
+	/* get table->bhist_width bits from ghist, push into combined string */
+	if(use_ghist)
+	{
+		/* get ghist_part */
+		ghist_part = pred->ghist & ~(0b0 << (table->bhist_width - 1));
+
+		/* set bits in comb_op first section */
+		comb_op |= (ghist_part << (comb_op_width - 1));
+	}
+
+	/* get baddr_part_width bits from baddr, push into combined string */
+	/* get baddr_part */
+	baddr_part = baddr & ~(0b0 << (baddr_part_width - 1));
+
+	/* set bits in comb_op in second section */
+	comb_op |= (baddr_part << (baddr_part_width + phist_part_width - 1));
+
+
+	/* get phist_part_width bits from table->phist, push into combined string */
+	/* get phist_part */
+	phist_part = pred->phist & ~(0b0 << (phist_part_width - 1));
+
+	/* set bits in comb_op in third section */
+	comb_op |= (phist_part << (phist_part_width - 1));
+
+	/* Determine spacing between bits captured for operators
+	 * When comb_op_width <= three_op_width, this need only be 1
+	 * i.e., every bit is captured from the combined operator bit string
+	 * When comb_op_width > three_op_width, the bits need to be captured from
+	 * (roughly) regular intervals.
+	 */
+	unsigned double delta = 1;
+	unsigned double position = 0;
+	unsigned int test_val = 0b0;
+
+	/* If comb_op_width > three_op_width, we need a bigger delta */
+	if(comb_op_width > three_op_width)
+	{
+		/* Dividing comb_op_width by (three_op_width - 1) will give an equal spacing
+		 * assuming 0 is the first bit captured.  delta will likely be a floating point
+		 * value and will need to be truncated when used for shift distances
+		 */
+
+		 delta = comb_op_width / (three_op_width - 1);
+	}
+
+	/* Capture first 11 bits from comb_op and shift into op1 using for loop */
+	for(int i = 0; i < 11; i++)
+	{
+		/* get value of bit at position in comb_op */
+		test_val = comb_op & (0b1 << (int) position);
+
+		/* Move the tested bit back to first position */
+		test_val = (test_val >> (int) position);
+
+		/* Set bit in op1 */
+		op1 |= (test_val << i);
+
+		position += delta;
+	}
+
+	/* Capture second 11 bits from comb_op and shift into op2 using for loop */
+	for(int i = 0; i < 11; i++)
+	{
+		/* get value of bit at position in comb_op */
+		test_val = comb_op & (0b1 << (int) position);
+
+		/* Move the tested bit back to first position */
+		test_val = (test_val >> (int) position);
+
+		/* Set bit in op3 */
+		op2 |= (test_val << i);
+
+		position += delta;
+	}
+
+	/* Capture third 11 bits from comb_op and shift into op3 using for loop */
+	for(int i = 0; i < 11; i++)
+	{
+		/* get value of bit at position in comb_op */
+		test_val = comb_op & (0b1 << (int) position);
+
+		/* Move the tested bit back to first position */
+		test_val = (test_val >> (int) position);
+
+		/* Set bit in op3 */
+		op3 |= (test_val << i);
+
+		position += delta;
+	}
+
+	/* Perform 3-way bitwise XOR to get counter index */
+	/* Return counter index */
+
+	return (~op1 & (op2 ^ op3)) | (op1 & ~(op2 | op3));
+
 }
 
 /* Speculative execution can corrupt the ret-addr stack.  So for each
@@ -1125,4 +1405,19 @@ bpred_update(struct bpred_t *pred,	/* branch predictor instance */
 	  pbtb->target = btarget;
 	}
     }
+}
+
+/* Returns the lesser of two integers */
+int
+minimum(int a, /* The first integer to compare */
+		int b /* The second integer to compare */)
+{
+	if (a <= b)
+	{
+		return a;
+	}
+	else
+	{
+		return b;
+	}
 }

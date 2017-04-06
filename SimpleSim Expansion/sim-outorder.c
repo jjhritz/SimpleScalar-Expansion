@@ -989,6 +989,19 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
 	  			  /* ret-addr stack size */ras_size);
   }
   //TODO: create OGEHL predictor
+  else if (!mystricmp(pred_type, "ogehl"))
+  {
+	  pred = bpred_create(BPredOGEHL,
+	  			  /* bimod table size */bimod_config[0],
+	  			  /* l1 size */twolev_config[0],
+	  			  /* l2 size */twolev_config[1],
+	  			  /* meta table size */comb_config[0],
+	  			  /* history reg size */twolev_config[2],
+	  			  /* history xor address */twolev_config[3],
+	  			  /* btb sets */1024,
+	  			  /* btb assoc */btb_config[1],
+	  			  /* ret-addr stack size */ras_size);
+  }
   else
     fatal("cannot parse predictor type `%s'", pred_type);
 
